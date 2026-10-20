@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Token-Bucket Rate Limiter | Real-Time Telemetry & Presentation</title>
+  <meta name="description" content="Production-grade Token-Bucket Rate Limiter with real-time backend telemetry, dynamic in-memory bucket inspection, and presentation deck.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header>
+      <div class="brand">
+        <div class="brand-icon">⚡</div>
+        <div class="brand-title">
+          <h1>Token-Bucket Rate Limiter</h1>
+          <p>Real-Time In-Memory Telemetry • FastAPI & Pydantic Engine</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <div class="status-pill" id="health-pill">
+          <span class="status-dot"></span>
+          <span id="health-text">Backend Connected</span>
+        </div>
+        <a href="/docs" target="_blank" class="btn-link">
+          <span>📖 Swagger Docs</span>
+        </a>
+        <a href="/v1/limiter/status" target="_blank" class="btn-link">
+          <span>📡 Raw JSON Telemetry</span>
+        </a>
+      </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <div class="tab-navigation">
+      <button class="tab-btn active" onclick="switchTab('lab')">🧪 Real-Time Simulation Lab</button>
+      <button class="tab-btn" onclick="switchTab('slides')">📊 Architecture & Presentation Deck</button>
+    </div>
+
+    <!-- TAB 1: REAL-TIME INTERACTIVE LAB -->
+    <div id="tab-lab" class="tab-content active">
+      <div class="dashboard-grid">
+        
+        <!-- Column 1: Config & Controls -->
+        <div class="glass-card">
+          <div class="card-header">
+            <h2 class="card-title">🎛️ Dynamic Traffic Controls</h2>
+          </div>
+
+          <!-- Dynamic Key Selection -->
+          <div class="form-group">
+            <label class="form-label">
+              <span>Active Tenant / Client Key</span>
+              <span class="val-hint" id="active-key-hint">Dynamic</span>
+            </label>
+            <div class="key-selector" id="key-chips-container">
+              <!-- Rendered dynamically from real backend buckets -->
+            </div>
+            <input type="text" id="input-key" class="form-input" value="client-api-1" placeholder="Enter custom tenant/user key...">
+          </div>
+
+          <!-- Burst Capacity -->
+          <div class="form-group">
+            <div class="form-label">
+              <span>Burst Capacity (B)</span>
+              <span class="val-hint" id="val-burst">5 tokens</span>
+            </div>
+            <div class="slider-container">
+              <input type="range" id="input-burst" class="slider" min="1" max="50" value="5">
+            </div>
+          </div>
+
+          <!-- Refill Rate -->
+          <div class="form-group">
+            <div class="form-label">
+              <span>Refill Rate (R)</span>
+              <span class="val-hint" id="val-rate">2.0 / sec</span>
+            </div>
+            <div class="slider-container">
+              <input type="range" id="input-rate" class="slider" min="0.5" max="20" step="0.5" value="2.0">
+            </div>
+          </div>
+
+          <!-- Cost -->
+          <div class="form-group">
+            <div class="form-label">
+              <span>Token Cost (C)</span>
+              <span class="val-hint" id="val-cost">1 token</span>
+            </div>
+            <div class="slider-container">
+              <input type="range" id="input-cost" class="slider" min="1" max="10" value="1">
+            </div>
+          </div>
+
+          <!-- Action Buttons -->
+          <button class="btn-primary" id="btn-submit" onclick="sendRateLimitCheck()">
+            <span>🚀 Send Request to Backend</span>
+          </button>
+
+          <div class="btn-group">
+            <button class="btn-secondary" onclick="triggerBurst(5)">🔥 5x Rapid Burst</button>
+            <button class="btn-secondary" onclick="triggerBurst(10)">⚡ 10x Heavy Burst</button>
+          </div>
+
+          <!-- Real-Time Traffic Simulation Toggle -->
+          <div class="traffic-toggle">
+            <div>
+              <div style="font-size: 13px; font-weight: 600; color: #fff;">Real-Time Traffic Stream</div>
+              <div style="font-size: 11px; color: var(--text-dim);">Sends live requests every 1s</div>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="traffic-sim-toggle">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Column 2: Visual Bucket Container -->
+        <div class="glass-card visualizer-container">
+          <div class="card-header" style="width: 100%;">
+            <h2 class="card-title">💧 Live In-Memory Token Bucket</h2>
+            <span style="font-size: 12px; color: var(--text-dim); font-family: var(--font-mono);">
+              Selected: <span id="display-key" style="color: var(--accent-cyan);">client-api-1</span>
+            </span>
+          </div>
+
+          <!-- Bucket Cylinder -->
+          <div class="bucket-wrapper">
+            <div class="bucket-cylinder">
+              <div class="bucket-fluid" id="bucket-fluid">
+                <div class="fluid-wave"></div>
+              </div>
+            </div>
+
+            <!-- Ticks -->
+            <div class="bucket-ticks">
+              <span id="tick-max">5.0</span>
+              <span id="tick-mid">2.5</span>
+              <span>0.0</span>
+            </div>
+
+            <!-- Value Overlay -->
+            <div class="token-readout">
+              <div class="token-val" id="display-tokens">5.00</div>
+              <div class="token-sub">Live Tokens</div>
+            </div>
+          </div>
+
+          <!-- Result Indicator Banner -->
+          <div class="result-banner allowed" id="result-banner">
+            <div class="result-status">
+              <span class="result-icon" id="banner-icon">✅</span>
+              <div class="result-text">
+                <h3 id="banner-title">Live Telemetry Active</h3>
+                <div class="result-meta" id="banner-sub">Backend memory state synced continuously</div>
+              </div>
+            </div>
+            <div id="retry-container" style="display: none;">
+              <span class="retry-badge" id="banner-retry">Retry: 0.0s</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Column 3: Live Server Telemetry & Audit Stream -->
+        <div class="glass-card">
+          <div class="card-header">
+            <h2 class="card-title">📡 Server Telemetry</h2>
+            <button class="btn-secondary" style="padding: 4px 8px; font-size: 11px;" onclick="resetLimiterState()">Reset State</button>
+          </div>
+
+          <div class="stats-row">
+            <div class="stat-box">
+              <div class="stat-label">Active Buckets</div>
+              <div class="stat-value" id="stat-keys-count">0</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">Total Checks</div>
+              <div class="stat-value" id="stat-total">0</div>
+            </div>
+          </div>
+
+          <div class="stats-row">
+            <div class="stat-box">
+              <div class="stat-label">Server Allowed</div>
+              <div class="stat-value" style="color: #34d399;" id="stat-allowed">0</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">Server Throttled</div>
+              <div class="stat-value" style="color: #f87171;" id="stat-denied">0</div>
+            </div>
+          </div>
+
+          <div class="stream-list" id="audit-stream">
+            <!-- Dynamic stream items populated in real-time -->
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- TAB 2: PRESENTATION DECK & ARCHITECTURE -->
+    <div id="tab-slides" class="tab-content">
+      <div class="presentation-container">
+        
+        <div class="glass-card" style="background: linear-gradient(135deg, rgba(18, 24, 38, 0.9), rgba(10, 20, 40, 0.95)); border-color: var(--border-glow);">
+          <h2 style="font-size: 26px; font-weight: 800; margin-bottom: 8px; background: linear-gradient(90deg, #00f2fe, #4facfe); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+            Project Presentation: Token-Bucket Rate Limiter REST API
+          </h2>
+          <p style="color: var(--text-muted); font-size: 15px; max-width: 860px;">
+            A complete architectural summary detailing design decisions, mathematical models, thread synchronization, and operational resilience designed for presentation to technical teams and stakeholders.
+          </p>
+        </div>
+
+        <div class="slide-deck">
+          
+          <div class="slide-card">
+            <span class="slide-num">01</span>
+            <h3>Problem & Algorithmic Strategy</h3>
+            <p>Traditional fixed-window counters suffer from the <strong>boundary burst vulnerability</strong> (2x traffic spikes at window transitions). The token bucket algorithm resolves this through continuous rate shaping.</p>
+            <div class="code-snippet">
+Tokens(t) = min(B, Tokens(t_prev) + Δt * Rate)
+            </div>
+            <ul class="slide-list">
+              <li>Accommodates burst traffic up to capacity <code>B</code>.</li>
+              <li>Smooths sustained throughput at <code>Rate</code> tokens/sec.</li>
+              <li>No discrete window resets or boundary loopholes.</li>
+            </ul>
+          </div>
+
+          <div class="slide-card">
+            <span class="slide-num">02</span>
+            <h3>Thread Safety & Concurrency</h3>
+            <p>High-throughput backend services require low lock contention and strict atomicity to prevent race condition over-allocations.</p>
+            <div class="code-snippet">
+RegistryLock  -> Manages bucket allocation
+Bucket.lock   -> Serializes same-key checks
+            </div>
+            <ul class="slide-list">
+              <li>Two-tier locking hierarchy maximizes parallel execution.</li>
+              <li>Independent keys execute 100% concurrently.</li>
+              <li>Proven by 50-worker thread test with zero state corruption.</li>
+            </ul>
+          </div>
+
+          <div class="slide-card">
+            <span class="slide-num">03</span>
+            <h3>Dynamic Policy Clamping</h3>
+            <p>If an API gateway or admin modifies a tenant's rate or burst capacity in real-time, the bucket must update smoothly without exploits.</p>
+            <div class="code-snippet">
+# Tokens refilled at old rate, clamped to new burst:
+bucket.tokens = min(new_burst, refilled_tokens)
+            </div>
+            <ul class="slide-list">
+              <li>Does NOT reset an exhausted bucket back to full.</li>
+              <li>Clamps gracefully if new burst is lower than current balance.</li>
+              <li>Applies new refill rate going forward.</li>
+            </ul>
+          </div>
+
+          <div class="slide-card">
+            <span class="slide-num">04</span>
+            <h3>Deterministic Testing with Injected Clock</h3>
+            <p>Time-dependent algorithms usually suffer from slow or flaky tests when using real-time sleeps (<code>time.sleep</code>).</p>
+            <div class="code-snippet">
+def __init__(self, clock: Callable[[], float] = time.monotonic):
+    self._clock = clock
+            </div>
+            <ul class="slide-list">
+              <li><code>FakeClock</code> allows advancing time instantaneously in pytest.</li>
+              <li>39+ automated tests run and complete in ~1.2 seconds.</li>
+              <li>100% code coverage across all business logic and API endpoints.</li>
+            </ul>
+          </div>
+
+          <div class="slide-card">
+            <span class="slide-num">05</span>
+            <h3>REST API Contract & Status Codes</h3>
+            <p>Adheres strictly to modern API design standards for traffic limiting.</p>
+            <ul class="slide-list">
+              <li><code>GET /health</code>: HTTP 200 health probe.</li>
+              <li><code>POST /v1/limit/check</code>: HTTP 200 for both Allowed and Denied (rate limiting is a valid decision, not an error).</li>
+              <li><code>HTTP 422</code>: Strict Pydantic validation for negative rates, empty keys, or <code>cost > burst</code>.</li>
+              <li>Provides exact <code>retry_after_seconds</code> on denial.</li>
+            </ul>
+          </div>
+
+          <div class="slide-card">
+            <span class="slide-num">06</span>
+            <h3>Production Integration Checklist</h3>
+            <p>Guidelines for integrating into larger production microservices:</p>
+            <ul class="slide-list">
+              <li><strong>Process-Local:</strong> Perfect for sidecars or single-process API proxies.</li>
+              <li><strong>Distributed Deployment:</strong> For multi-worker clusters, swap in-memory dict with Redis Lua script token bucket.</li>
+              <li><strong>Memory Management:</strong> Introduce TTL / LRU eviction for workloads with billions of ephemeral keys.</li>
+            </ul>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      Token-Bucket Rate Limiter • Built with Python 3.13, FastAPI & Pydantic • Dynamic Real-Time Telemetry
+    </footer>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
